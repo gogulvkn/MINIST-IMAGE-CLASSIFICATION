@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MNIST Digit Recognizer</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #111; color: #eee;
+         display: flex; flex-direction: column; align-items: center; margin: 0; padding: 24px; }
+  canvas { background: #000; border: 2px solid #444; border-radius: 8px; touch-action: none; cursor: crosshair; }
+  .row { margin-top: 14px; display: flex; gap: 10px; }
+  button { padding: 10px 20px; border: 0; border-radius: 6px; font-size: 16px; cursor: pointer; }
+  #predictBtn { background: #4f8cff; color: #fff; }
+  #clearBtn { background: #333; color: #eee; }
+  #result { margin-top: 20px; font-size: 56px; font-weight: 700; }
+  #conf { font-size: 16px; color: #999; min-height: 20px; }
+  input { background: #222; color: #eee; border: 1px solid #444; border-radius: 6px; padding: 8px; width: 280px; margin-top: 18px; }
+</style>
+</head>
+<body>
+  <h2>Draw a digit (0-9)</h2>
+  <canvas id="c" width="280" height="280"></canvas>
+  <div class="row">
+    <button id="predictBtn">Predict</button>
+    <button id="clearBtn">Clear</button>
+  </div>
+  <div id="result">-</div>
+  <div id="conf"></div>
+  <input id="api" value="/predict" title="API endpoint">
+
+<script>
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+let drawing = false;
+
+function reset() {
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 20;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  document.getElementById("result").textContent = "-";
+  document.getElementById("conf").textContent = "";
+}
+reset();
+
+function pos(e) {
+  const r = canvas.getBoundingClientRect();
+  return { x: (e.clientX - r.left) * canvas.width / r.width,
+           y: (e.clientY - r.top) * canvas.height / r.height };
+}
+
+canvas.addEventListener("pointerdown", e => {
+  drawing = true;
+  const p = pos(e);
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y);
+  ctx.lineTo(p.x + 0.1, p.y + 0.1);
+  ctx.stroke();
+});
+canvas.addEventListener("pointermove", e => {
+  if (!drawing) return;
+  const p = pos(e);
+  ctx.lineTo(p.x, p.y);
+  ctx.stroke();
+});
+["pointerup", "pointerleave"].forEach(ev =>
+  canvas.addEventListener(ev, () => { if (drawing) { drawing = false; predict(); } })
+);
+
+async function predict() {
+  const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
+  const form = new FormData();
+  form.append("file", blob, "digit.png");
+  try {
+    const r = await fetch(document.getElementById("api").value, { method: "POST", body: form });
+    const d = await r.json();
+    document.getElementById("result").textContent = d.digit;
+    document.getElementById("conf").textContent = "Confidence: " + (d.confidence * 100).toFixed(1) + "%";
+  } catch (err) {
+    document.getElementById("result").textContent = "!";
+    document.getElementById("conf").textContent = "Request failed: " + err.message;
+  }
+}
+
+document.getElementById("predictBtn").onclick = predict;
+document.getElementById("clearBtn").onclick = reset;
+</script>
+</body>
+</html>
